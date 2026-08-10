@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="人間と画面を見られるAIが、同じ盤面を正確に共有して遊べるオセロ。">
+  <title>AIとオセロ</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0c1612;
+      --panel: #14231c;
+      --panel-2: #192c23;
+      --ink: #f4f0df;
+      --muted: #a9b9af;
+      --line: rgba(244, 240, 223, .13);
+      --green: #258354;
+      --green-2: #2f9965;
+      --accent: #f2c66d;
+      --danger: #ef806e;
+      --shadow: 0 28px 70px rgba(0, 0, 0, .35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 8%, rgba(49, 143, 94, .18), transparent 27rem),
+        radial-gradient(circle at 88% 85%, rgba(242, 198, 109, .09), transparent 28rem),
+        var(--bg);
+      font-family: "Yu Gothic UI", "Hiragino Sans", system-ui, sans-serif;
+    }
+
+    button, summary { font: inherit; }
+    button { color: inherit; }
+
+    .app {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 34px 0 48px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 7px;
+      color: var(--accent);
+      font-size: .76rem;
+      font-weight: 800;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: Georgia, "Yu Mincho", serif;
+      font-size: clamp(2rem, 6vw, 4.25rem);
+      font-weight: 500;
+      letter-spacing: -.045em;
+      line-height: .95;
+    }
+
+    .lede {
+      max-width: 34rem;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: .94rem;
+      line-height: 1.75;
+    }
+
+    .header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
+
+    .soft-button {
+      min-height: 40px;
+      padding: 0 15px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.035);
+      cursor: pointer;
+      transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+
+    .soft-button:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.25); }
+    .soft-button:active { transform: translateY(1px); }
+    .soft-button:disabled { opacity: .4; cursor: not-allowed; }
+
+    .game-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .game-card, .side-card, details {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(20, 35, 28, .88);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .game-card { padding: clamp(14px, 3vw, 25px); }
+
+    .scorebar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 17px;
+    }
+
+    .player {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: .88rem;
+      font-weight: 750;
+    }
+
+    .player:last-child { justify-content: flex-end; }
+
+    .score-disc {
+      width: 25px;
+      aspect-ratio: 1;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      box-shadow: 0 4px 9px rgba(0,0,0,.36);
+    }
+
+    .score-disc.black { background: radial-gradient(circle at 34% 26%, #505851, #080b09 65%); }
+    .score-disc.white { background: radial-gradient(circle at 34% 26%, #fff, #d9d8cf 72%); }
+    .score { color: var(--ink); font-size: 1.55rem; font-variant-numeric: tabular-nums; }
+
+    .turn-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 37px;
+      padding: 0 13px;
+      border: 1px solid rgba(242,198,109,.25);
+      border-radius: 999px;
+      color: var(--accent);
+      background: rgba(242,198,109,.07);
+      font-size: .8rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .turn-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(242,198,109,.1); }
+
+    .board-wrap {
+      display: grid;
+      grid-template-columns: 25px minmax(0, 1fr);
+      grid-template-rows: 25px minmax(0, 1fr);
+      width: min(100%, 650px);
+      margin: 0 auto;
+    }
+
+    .column-labels, .row-labels { color: rgba(244,240,223,.68); font-size: .73rem; font-weight: 800; }
+    .column-labels { grid-column: 2; display: grid; grid-template-columns: repeat(8, 1fr); text-align: center; align-items: center; }
+    .row-labels { grid-row: 2; display: grid; grid-template-rows: repeat(8, 1fr); align-items: center; text-align: center; }
+
+    #board {
+      grid-column: 2;
+      grid-row: 2;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      aspect-ratio: 1;
+      overflow: hidden;
+      border: 4px solid #0b1711;
+      border-radius: 11px;
+      background: var(--green);
+      box-shadow: 0 18px 38px rgba(0,0,0,.34), inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+
+    .cell {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      padding: 7%;
+      border: 0;
+      border-right: 1px solid rgba(5, 24, 15, .7);
+      border-bottom: 1px solid rgba(5, 24, 15, .7);
+      background: transparent;
+      cursor: default;
+    }
+
+    .cell:nth-child(8n) { border-right: 0; }
+    .cell:nth-last-child(-n+8) { border-bottom: 0; }
+    .cell.legal { cursor: pointer; }
+    .cell.legal::before {
+      content: "";
+      width: 18%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: rgba(242,198,109,.82);
+      box-shadow: 0 0 0 5px rgba(242,198,109,.07);
+      transition: transform .14s ease, background .14s ease;
+    }
+    .cell.legal:hover::before, .cell.legal:focus-visible::before { transform: scale(1.55); background: var(--accent); }
+    .cell:focus-visible { z-index: 2; outline: 3px solid var(--accent); outline-offset: -4px; }
+    .cell.last::after {
+      content: "";
+      position: absolute;
+      right: 11%;
+      bottom: 11%;
+      width: 9%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 0 2px rgba(12,22,18,.7);
+    }
+
+    .disc {
+      width: 88%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      animation: place .18s cubic-bezier(.2,.8,.2,1);
+      box-shadow: 0 6px 12px rgba(0,0,0,.32);
+    }
+
+    .disc.black { background: radial-gradient(circle at 33% 26%, #59635b, #080b09 60%); }
+    .disc.white { background: radial-gradient(circle at 33% 26%, #fff, #d6d5cb 70%); }
+    @keyframes place { from { transform: scale(.25); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+
+    .side-stack { display: grid; gap: 14px; }
+    .side-card { padding: 20px; }
+    .side-card h2 { margin: 0 0 13px; font-family: Georgia, "Yu Mincho", serif; font-size: 1.15rem; font-weight: 500; }
+    .status-text { min-height: 3.2em; margin: 0; color: var(--ink); font-size: .95rem; line-height: 1.65; }
+
+    .legal-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 15px; }
+    .move-chip {
+      padding: 5px 9px;
+      border: 1px solid rgba(242,198,109,.22);
+      border-radius: 7px;
+      color: var(--accent);
+      background: rgba(242,198,109,.06);
+      font: 700 .78rem ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .history {
+      max-height: 265px;
+      overflow: auto;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      scrollbar-color: rgba(255,255,255,.18) transparent;
+    }
+    .history li { display: grid; grid-template-columns: 28px 1fr auto; gap: 9px; padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .82rem; }
+    .history li:last-child { border-bottom: 0; }
+    .history .move-color { color: var(--ink); }
+    .history .move-coord { color: var(--accent); font: 800 .82rem ui-monospace, Consolas, monospace; }
+    .empty-history { color: var(--muted); font-size: .84rem; line-height: 1.6; }
+
+    details { margin-top: 22px; overflow: hidden; box-shadow: none; }
+    summary { padding: 16px 20px; color: var(--muted); cursor: pointer; font-size: .86rem; font-weight: 750; }
+    .ai-panel { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 0 20px 20px; }
+    #ai-readable-state {
+      min-width: 0;
+      max-height: 310px;
+      overflow: auto;
+      margin: 0;
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: #d9e9df;
+      background: #08100c;
+      font: .75rem/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .ai-actions { display: grid; align-content: start; gap: 8px; }
+    .copy-status { min-height: 1.3em; margin: 7px 0 0; color: var(--accent); font-size: .75rem; text-align: center; }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    footer { margin-top: 22px; color: var(--muted); font-size: .76rem; text-align: center; }
+
+    @media (max-width: 840px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .header-actions { justify-content: flex-start; }
+      .game-layout { grid-template-columns: 1fr; }
+      .side-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 560px) {
+      .app { width: min(100% - 18px, 1120px); padding-top: 20px; }
+      .side-stack { grid-template-columns: 1fr; }
+      .scorebar { gap: 5px; }
+      .player { gap: 6px; font-size: .76rem; }
+      .score { font-size: 1.2rem; }
+      .score-disc { width: 20px; }
+      .turn-pill { padding: 0 9px; font-size: .7rem; }
+      .ai-panel { grid-template-columns: 1fr; }
+      .ai-actions { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body data-revision="0" data-turn="black" data-game-status="playing">
+  <main class="app">
+    <header>
+      <div>
+        <p class="eyebrow">Shared board for human + AI</p>
+        <h1>AIとオセロ</h1>
+        <p class="lede">同じ画面を見ながら、一手ずつ。盤面の裏側には、画面を操作できるAIが読み間違えにくい状態データが同期されています。</p>
+      </div>
+      <div class="header-actions" aria-label="ゲーム操作">
+        <button id="undo-button" class="soft-button" type="button">一手戻す</button>
+        <button id="reset-button" class="soft-button" type="button">最初から</button>
+      </div>
+    </header>
+
+    <section class="game-layout" aria-label="オセロ対局">
+      <div class="game-card">
+        <div class="scorebar" aria-label="得点と手番">
+          <div class="player"><span class="score-disc black" aria-hidden="true"></span><span>黒</span><strong id="black-score" class="score">2</strong></div>
+          <div id="turn-pill" class="turn-pill"><span class="turn-dot" aria-hidden="true"></span><span id="turn-label">黒の番</span></div>
+          <div class="player"><strong id="white-score" class="score">2</strong><span>白</span><span class="score-disc white" aria-hidden="true"></span></div>
+        </div>
+
+        <div class="board-wrap">
+          <div class="column-labels" aria-hidden="true"><span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span></div>
+          <div class="row-labels" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span></div>
+          <div id="board" role="grid" aria-label="8かける8のオセロ盤"></div>
+        </div>
+      </div>
+
+      <aside class="side-stack">
+        <section class="side-card" aria-labelledby="status-heading">
+          <h2 id="status-heading">いまの対局</h2>
+          <p id="status-text" class="status-text" aria-live="polite">黒の番です。黄色い点が置ける場所です。</p>
+          <div id="legal-list" class="legal-list" aria-label="現在の合法手"></div>
+        </section>
+
+        <section class="side-card" aria-labelledby="history-heading">
+          <h2 id="history-heading">棋譜</h2>
+          <ol id="history-list" class="history"></ol>
+          <p id="empty-history" class="empty-history">まだ着手はありません。黒から始まります。</p>
+        </section>
+      </aside>
+    </section>
+
+    <details id="ai-details">
+      <summary>AI共有データを見る（盤面JSON・合法手・更新番号）</summary>
+      <div class="ai-panel">
+        <pre id="ai-readable-state" aria-label="AI向け盤面状態"></pre>
+        <div class="ai-actions">
+          <button id="copy-state-button" class="soft-button" type="button">状態をコピー</button>
+          <button id="copy-prompt-button" class="soft-button" type="button">対局プロンプトをコピー</button>
+          <p id="copy-status" class="copy-status" aria-live="polite"></p>
+        </div>
+      </div>
+    </details>
+
+    <p class="sr-only" id="ai-state-summary" aria-live="polite"></p>
+    <script id="ai-state-json" type="application/json">{}</script>
+    <footer>サーバー不要・オフライン動作。盤面の黄色い点をクリックして、黒と白を交互に進めてください。</footer>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const SIZE = 8;
+      const EMPTY = ".";
+      const BLACK = "B";
+      const WHITE = "W";
+      const COLUMNS = "abcdefgh";
+      const DIRECTIONS = [
+        [-1, -1], [0, -1], [1, -1],
+        [-1,  0],           [1,  0],
+        [-1,  1], [0,  1], [1,  1]
+      ];
+
+      const els = {
+        board: document.getElementById("board"),
+        blackScore: document.getElementById("black-score"),
+        whiteScore: document.getElementById("white-score"),
+        turnLabel: document.getElementById("turn-label"),
+        turnPill: document.getElementById("turn-pill"),
+        statusText: document.getElementById("status-text"),
+        legalList: document.getElementById("legal-list"),
+        historyList: document.getElementById("history-list"),
+        emptyHistory: document.getElementById("empty-history"),
+        undoButton: document.getElementById("undo-button"),
+        resetButton: document.getElementById("reset-button"),
+        aiReadableState: document.getElementById("ai-readable-state"),
+        aiStateJson: document.getElementById("ai-state-json"),
+        aiStateSummary: document.getElementById("ai-state-summary"),
+        copyStateButton: document.getElementById("copy-state-button"),
+        copyPromptButton: document.getElementById("copy-prompt-button"),
+        copyStatus: document.getElementById("copy-status")
+      };
+
+      let board = [];
+      let turn = BLACK;
+      let gameStatus = "playing";
+      let lastMove = null;
+      let moveHistory = [];
+      let undoStack = [];
+      let revision = 0;
+
+      function index(x, y) { return y * SIZE + x; }
+      function inside(x, y) { return x >= 0 && x < SIZE && y >= 0 && y < SIZE; }
+      function opponent(color) { return color === BLACK ? WHITE : BLACK; }
+      function colorName(color) { return color === BLACK ? "黒" : "白"; }
+      function coord(x, y) { return `${COLUMNS[x]}${y + 1}`; }
+
+      function parseCoord(value) {
+        if (typeof value !== "string") return null;
+        const match = /^([a-h])([1-8])$/i.exec(value.trim());
+        if (!match) return null;
+        return { x: COLUMNS.indexOf(match[1].toLowerCase()), y: Number(match[2]) - 1 };
+      }
+
+      function newBoard() {
+        const next = Array(SIZE * SIZE).fill(EMPTY);
+        next[index(3, 3)] = WHITE;
+        next[index(4, 3)] = BLACK;
+        next[index(3, 4)] = BLACK;
+        next[index(4, 4)] = WHITE;
+        return next;
+      }
+
+      function getFlips(x, y, color, source = board) {
+        if (!inside(x, y) || source[index(x, y)] !== EMPTY) return [];
+        const other = opponent(color);
+        const result = [];
+
+        for (const [dx, dy] of DIRECTIONS) {
+          const line = [];
+          let cx = x + dx;
+          let cy = y + dy;
+          while (inside(cx, cy) && source[index(cx, cy)] === other) {
+            line.push({ x: cx, y: cy });
+            cx += dx;
+            cy += dy;
+          }
+          if (line.length && inside(cx, cy) && source[index(cx, cy)] === color) {
+            result.push(...line);
+          }
+        }
+        return result;
+      }
+
+      function getLegalMoves(color = turn, source = board) {
+        const moves = [];
+        for (let y = 0; y < SIZE; y += 1) {
+          for (let x = 0; x < SIZE; x += 1) {
+            const flips = getFlips(x, y, color, source);
+            if (flips.length) moves.push({ coordinate: coord(x, y), x, y, flips });
+          }
+        }
+        return moves;
+      }
+
+      function snapshot() {
+        return {
+          board: [...board], turn, gameStatus, lastMove,
+          moveHistory: moveHistory.map(move => ({ ...move, flippedCoordinates: [...move.flippedCoordinates] }))
+        };
+      }
+
+      function restore(state) {
+        board = [...state.board];
+        turn = state.turn;
+        gameStatus = state.gameStatus;
+        lastMove = state.lastMove;
+        moveHistory = state.moveHistory.map(move => ({ ...move, flippedCoordinates: [...move.flippedCoordinates] }));
+      }
+
+      function playMove(value) {
+        if (gameStatus !== "playing") return { ok: false, reason: "game-over", state: publicState() };
+        const parsed = parseCoord(value);
+        if (!parsed) return { ok: false, reason: "invalid-coordinate", state: publicState() };
+        const flips = getFlips(parsed.x, parsed.y, turn);
+        if (!flips.length) return { ok: false, reason: "illegal-move", state: publicState() };
+
+        undoStack.push(snapshot());
+        const movingColor = turn;
+        board[index(parsed.x, parsed.y)] = movingColor;
+        for (const point of flips) board[index(point.x, point.y)] = movingColor;
+        lastMove = coord(parsed.x, parsed.y);
+        moveHistory.push({
+          ply: moveHistory.length + 1,
+          color: movingColor === BLACK ? "black" : "white",
+          coordinate: lastMove,
+          flipped: flips.length,
+          flippedCoordinates: flips.map(point => coord(point.x, point.y))
+        });
+
+        turn = opponent(movingColor);
+        const nextMoves = getLegalMoves(turn);
+        if (!nextMoves.length) {
+          const passedColor = turn;
+          turn = opponent(turn);
+          const followingMoves = getLegalMoves(turn);
+          if (!followingMoves.length) {
+            gameStatus = "finished";
+          } else {
+            moveHistory.push({
+              ply: moveHistory.length + 1,
+              color: passedColor === BLACK ? "black" : "white",
+              coordinate: "pass",
+              flipped: 0,
+              flippedCoordinates: []
+            });
+          }
+        }
+
+        revision += 1;
+        render();
+        return { ok: true, reason: null, state: publicState() };
+      }
+
+      function resetGame() {
+        board = newBoard();
+        turn = BLACK;
+        gameStatus = "playing";
+        lastMove = null;
+        moveHistory = [];
+        undoStack = [];
+        revision += 1;
+        render();
+        return publicState();
+      }
+
+      function undoMove() {
+        if (!undoStack.length) return { ok: false, reason: "nothing-to-undo", state: publicState() };
+        restore(undoStack.pop());
+        revision += 1;
+        render();
+        return { ok: true, reason: null, state: publicState() };
+      }
+
+      function counts() {
+        return {
+          black: board.filter(cell => cell === BLACK).length,
+          white: board.filter(cell => cell === WHITE).length,
+          empty: board.filter(cell => cell === EMPTY).length
+        };
+      }
+
+      function winner() {
+        if (gameStatus !== "finished") return null;
+        const score = counts();
+        if (score.black === score.white) return "draw";
+        return score.black > score.white ? "black" : "white";
+      }
+
+      function publicState() {
+        const legalMoves = gameStatus === "playing" ? getLegalMoves(turn) : [];
+        const score = counts();
+        return {
+          schema: "ai-othello-state/v1",
+          revision,
+          gameStatus,
+          boardEncoding: "8 strings, top-to-bottom; B=black, W=white, .=empty",
+          coordinateSystem: "columns a-h left-to-right; rows 1-8 top-to-bottom",
+          board: Array.from({ length: SIZE }, (_, y) => board.slice(y * SIZE, (y + 1) * SIZE).join("")),
+          turn: gameStatus === "playing" ? (turn === BLACK ? "black" : "white") : null,
+          legalMoves: legalMoves.map(move => move.coordinate),
+          legalMoveDetails: legalMoves.map(move => ({
+            coordinate: move.coordinate,
+            flips: move.flips.map(point => coord(point.x, point.y))
+          })),
+          lastMove,
+          counts: score,
+          winner: winner(),
+          moveNumber: moveHistory.filter(move => move.coordinate !== "pass").length,
+          moveHistory: moveHistory.map(move => ({ ...move, flippedCoordinates: [...move.flippedCoordinates] }))
+        };
+      }
+
+      function cellLabel(x, y, value, legal, flips) {
+        const position = coord(x, y);
+        if (value === BLACK) return `${position}、黒石${lastMove === position ? "、直前の手" : ""}`;
+        if (value === WHITE) return `${position}、白石${lastMove === position ? "、直前の手" : ""}`;
+        if (legal) return `${position}、空き、${colorName(turn)}の合法手、${flips.length}個の石を返します`;
+        return `${position}、空き、現在は置けません`;
+      }
+
+      function renderBoard(legalMoves) {
+        const legalMap = new Map(legalMoves.map(move => [move.coordinate, move]));
+        const fragment = document.createDocumentFragment();
+        for (let y = 0; y < SIZE; y += 1) {
+          for (let x = 0; x < SIZE; x += 1) {
+            const position = coord(x, y);
+            const value = board[index(x, y)];
+            const legalMove = legalMap.get(position);
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = `cell${legalMove ? " legal" : ""}${lastMove === position ? " last" : ""}`;
+            button.setAttribute("role", "gridcell");
+            button.setAttribute("aria-label", cellLabel(x, y, value, Boolean(legalMove), legalMove?.flips ?? []));
+            button.dataset.coordinate = position;
+            button.dataset.column = COLUMNS[x];
+            button.dataset.row = String(y + 1);
+            button.dataset.state = value === BLACK ? "black" : value === WHITE ? "white" : "empty";
+            button.dataset.legal = String(Boolean(legalMove));
+            button.dataset.flips = legalMove ? legalMove.flips.map(point => coord(point.x, point.y)).join(",") : "";
+            button.disabled = !legalMove || gameStatus !== "playing";
+            if (value !== EMPTY) {
+              const disc = document.createElement("span");
+              disc.className = `disc ${value === BLACK ? "black" : "white"}`;
+              disc.setAttribute("aria-hidden", "true");
+              button.appendChild(disc);
+            }
+            if (legalMove) button.addEventListener("click", () => playMove(position));
+            fragment.appendChild(button);
+          }
+        }
+        els.board.replaceChildren(fragment);
+        els.board.setAttribute("aria-label", `オセロ盤、${colorName(turn)}の番、更新番号${revision}`);
+      }
+
+      function renderHistory() {
+        els.historyList.replaceChildren();
+        els.emptyHistory.hidden = moveHistory.length > 0;
+        for (const move of moveHistory) {
+          const item = document.createElement("li");
+          const mark = move.color === "black" ? "●" : "○";
+          const label = move.color === "black" ? "黒" : "白";
+          item.innerHTML = `<span>${move.ply}.</span><span class="move-color">${mark} ${label}</span><strong class="move-coord">${move.coordinate}</strong>`;
+          item.dataset.ply = String(move.ply);
+          item.dataset.color = move.color;
+          item.dataset.coordinate = move.coordinate;
+          els.historyList.appendChild(item);
+        }
+        els.historyList.scrollTop = els.historyList.scrollHeight;
+      }
+
+      function render() {
+        const state = publicState();
+        const legalMoves = gameStatus === "playing" ? getLegalMoves(turn) : [];
+        renderBoard(legalMoves);
+        renderHistory();
+
+        els.blackScore.textContent = String(state.counts.black);
+        els.whiteScore.textContent = String(state.counts.white);
+        els.undoButton.disabled = undoStack.length === 0;
+        els.legalList.replaceChildren(...state.legalMoves.map(move => {
+          const chip = document.createElement("span");
+          chip.className = "move-chip";
+          chip.textContent = move;
+          chip.dataset.coordinate = move;
+          return chip;
+        }));
+
+        if (gameStatus === "finished") {
+          const result = state.winner === "draw" ? "引き分け" : `${state.winner === "black" ? "黒" : "白"}の勝ち`;
+          els.turnLabel.textContent = "対局終了";
+          els.statusText.textContent = `対局終了。${state.counts.black}対${state.counts.white}で${result}です。`;
+          els.turnPill.style.color = "var(--danger)";
+        } else {
+          els.turnLabel.textContent = `${colorName(turn)}の番`;
+          els.statusText.textContent = `${colorName(turn)}の番です。置ける場所は ${state.legalMoves.join("、")} です。`;
+          els.turnPill.style.color = "var(--accent)";
+        }
+
+        const json = JSON.stringify(state, null, 2);
+        els.aiReadableState.textContent = json;
+        els.aiStateJson.textContent = json.replace(/<\//g, "<\\/");
+        els.aiStateSummary.textContent = gameStatus === "finished"
+          ? `更新番号${revision}。対局終了。黒${state.counts.black}、白${state.counts.white}。`
+          : `更新番号${revision}。${colorName(turn)}の番。黒${state.counts.black}、白${state.counts.white}。合法手は${state.legalMoves.join("、")}。`;
+
+        document.body.dataset.revision = String(revision);
+        document.body.dataset.turn = state.turn ?? "none";
+        document.body.dataset.gameStatus = gameStatus;
+        document.title = gameStatus === "playing" ? `AIとオセロ — ${colorName(turn)}の番` : "AIとオセロ — 対局終了";
+        window.dispatchEvent(new CustomEvent("othello-state-changed", { detail: state }));
+      }
+
+      async function copyText(text, message) {
+        let copied = false;
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch (_) {
+          const area = document.createElement("textarea");
+          area.value = text;
+          area.style.position = "fixed";
+          area.style.opacity = "0";
+          document.body.appendChild(area);
+          area.select();
+          copied = document.execCommand("copy");
+          area.remove();
+        }
+        els.copyStatus.textContent = copied ? message : "コピーできませんでした";
+        window.setTimeout(() => { els.copyStatus.textContent = ""; }, 2200);
+      }
+
+      els.undoButton.addEventListener("click", undoMove);
+      els.resetButton.addEventListener("click", () => {
+        if (moveHistory.length === 0 || window.confirm("盤面を初期状態に戻しますか？")) resetGame();
+      });
+      els.copyStateButton.addEventListener("click", () => copyText(JSON.stringify(publicState(), null, 2), "盤面状態をコピーしました"));
+      els.copyPromptButton.addEventListener("click", () => {
+        const state = JSON.stringify(publicState(), null, 2);
+        const prompt = `私とオセロをしてください。あなたは現在の手番の一手を選び、coordinateだけを明確に答えてください。盤面は上が1行目、左がa列です。\n\n${state}`;
+        copyText(prompt, "対局プロンプトをコピーしました");
+      });
+
+      window.othelloAI = Object.freeze({
+        getState: () => JSON.parse(JSON.stringify(publicState())),
+        playMove,
+        reset: resetGame,
+        undo: undoMove,
+        version: "1.0.0"
+      });
+
+      board = newBoard();
+      render();
+    })();
+  </script>
+</body>
+</html>
