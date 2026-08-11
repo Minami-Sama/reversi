@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="人間と画面を見られるAIが、同じ盤面を正確に共有して遊べるオセロ。">
-  <title>AIとオセロ</title>
+  <meta name="description" content="人間と画面を見られるAIが、同じ盤面を正確に共有して遊べるリバーシ。">
+  <title>AIとリバーシ</title>
   <style>
     :root {
       color-scheme: dark;
@@ -138,8 +138,8 @@
       box-shadow: 0 4px 9px rgba(0,0,0,.36);
     }
 
-    .score-disc.black { background: radial-gradient(circle at 34% 26%, #505851, #080b09 65%); }
-    .score-disc.white { background: radial-gradient(circle at 34% 26%, #fff, #d9d8cf 72%); }
+    .score-disc.black { background: #111713; }
+    .score-disc.white { background: #f3f1e8; }
     .score { color: var(--ink); font-size: 1.55rem; font-variant-numeric: tabular-nums; }
 
     .turn-pill {
@@ -159,6 +159,46 @@
 
     .turn-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(242,198,109,.1); }
 
+    .view-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 7px;
+      margin: -2px 0 15px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: rgba(6, 18, 12, .24);
+    }
+
+    .view-controls-label {
+      margin: 0 3px 0 2px;
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+
+    .toggle-button {
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255,255,255,.025);
+      font-size: .73rem;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    .toggle-button[aria-pressed="true"] {
+      color: var(--ink);
+      border-color: rgba(242,198,109,.34);
+      background: rgba(242,198,109,.09);
+    }
+
+    .toggle-state { color: var(--accent); font-family: ui-monospace, Consolas, monospace; }
+
     .board-wrap {
       display: grid;
       grid-template-columns: 25px minmax(0, 1fr);
@@ -176,6 +216,7 @@
       grid-row: 2;
       display: grid;
       grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, minmax(0, 1fr));
       aspect-ratio: 1;
       overflow: hidden;
       border: 4px solid #0b1711;
@@ -189,7 +230,9 @@
       display: grid;
       place-items: center;
       min-width: 0;
-      padding: 7%;
+      min-height: 0;
+      padding: 6%;
+      overflow: hidden;
       border: 0;
       border-right: 1px solid rgba(5, 24, 15, .7);
       border-bottom: 1px solid rgba(5, 24, 15, .7);
@@ -211,34 +254,101 @@
     }
     .cell.legal:hover::before, .cell.legal:focus-visible::before { transform: scale(1.55); background: var(--accent); }
     .cell:focus-visible { z-index: 2; outline: 3px solid var(--accent); outline-offset: -4px; }
-    .cell.last::after {
+    .coordinate-label {
+      position: absolute;
+      top: 7%;
+      left: 9%;
+      z-index: 3;
+      display: none;
+      color: rgba(4, 43, 25, .68);
+      font: 800 clamp(.58rem, 1.55vw, .84rem)/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: -.05em;
+      pointer-events: none;
+    }
+
+    #board.show-coordinates .coordinate-label { display: block; }
+    .cell[data-state="black"] .coordinate-label {
+      color: rgba(255,255,255,.76);
+      text-shadow: 0 1px 2px rgba(0,0,0,.72);
+    }
+    .cell[data-state="white"] .coordinate-label {
+      color: rgba(4, 27, 16, .72);
+      text-shadow: 0 1px 1px rgba(255,255,255,.46);
+    }
+    .cell.legal .coordinate-label { color: var(--accent); }
+
+    .last-marker {
+      --marker-size: 20%;
+      position: absolute;
+      inset: 5%;
+      z-index: 4;
+      display: none;
+      border-radius: 50%;
+      pointer-events: none;
+      background:
+        linear-gradient(var(--danger), var(--danger)) left top / var(--marker-size) 3px no-repeat,
+        linear-gradient(var(--danger), var(--danger)) left top / 3px var(--marker-size) no-repeat,
+        linear-gradient(var(--danger), var(--danger)) right top / var(--marker-size) 3px no-repeat,
+        linear-gradient(var(--danger), var(--danger)) right top / 3px var(--marker-size) no-repeat,
+        linear-gradient(var(--danger), var(--danger)) left bottom / var(--marker-size) 3px no-repeat,
+        linear-gradient(var(--danger), var(--danger)) left bottom / 3px var(--marker-size) no-repeat,
+        linear-gradient(var(--danger), var(--danger)) right bottom / var(--marker-size) 3px no-repeat,
+        linear-gradient(var(--danger), var(--danger)) right bottom / 3px var(--marker-size) no-repeat;
+      filter: drop-shadow(0 0 5px rgba(239,128,110,.6));
+    }
+
+    .cell.last .last-marker {
+      display: block;
+      animation: target-arrive .7s cubic-bezier(.2,.8,.2,1), target-breathe 2.5s .7s ease-in-out infinite;
+    }
+
+    .last-marker::after {
       content: "";
       position: absolute;
-      right: 11%;
-      bottom: 11%;
-      width: 9%;
-      aspect-ratio: 1;
+      inset: 7%;
+      border: 2px solid rgba(239,128,110,.8);
       border-radius: 50%;
-      background: var(--danger);
-      box-shadow: 0 0 0 2px rgba(12,22,18,.7);
+      animation: ripple .8s ease-out both;
     }
 
     .disc {
       width: 88%;
       aspect-ratio: 1;
       border-radius: 50%;
-      animation: place .18s cubic-bezier(.2,.8,.2,1);
-      box-shadow: 0 6px 12px rgba(0,0,0,.32);
+      box-shadow: 0 5px 0 rgba(0,0,0,.32), 0 8px 13px rgba(0,0,0,.22);
     }
 
-    .disc.black { background: radial-gradient(circle at 33% 26%, #59635b, #080b09 60%); }
-    .disc.white { background: radial-gradient(circle at 33% 26%, #fff, #d6d5cb 70%); }
-    @keyframes place { from { transform: scale(.25); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+    .disc.black { background: linear-gradient(155deg, #1b211d, #090c0a); }
+    .disc.white { background: linear-gradient(155deg, #fffef8, #e6e3d8); }
+    .disc.is-new { animation: place .24s cubic-bezier(.2,.8,.2,1); }
+    .disc.is-flipped { animation: flip .3s cubic-bezier(.2,.75,.2,1); }
+    @keyframes place { from { transform: translateY(-10%) scale(.42); opacity: .25; } to { transform: translateY(0) scale(1); opacity: 1; } }
+    @keyframes flip { 0% { transform: scaleX(1); } 48% { transform: scaleX(.08); } 100% { transform: scaleX(1); } }
+    @keyframes target-arrive { from { transform: scale(1.45); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes target-breathe { 0%, 100% { opacity: .72; } 50% { opacity: 1; } }
+    @keyframes ripple { from { transform: scale(.25); opacity: .85; } to { transform: scale(1.24); opacity: 0; } }
 
     .side-stack { display: grid; gap: 14px; }
     .side-card { padding: 20px; }
     .side-card h2 { margin: 0 0 13px; font-family: Georgia, "Yu Mincho", serif; font-size: 1.15rem; font-weight: 500; }
     .status-text { min-height: 3.2em; margin: 0; color: var(--ink); font-size: .95rem; line-height: 1.65; }
+    .last-move-note {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .last-move-note[hidden] { display: none; }
+    .last-move-icon {
+      width: 15px;
+      aspect-ratio: 1;
+      border: 2px solid var(--danger);
+      border-radius: 4px;
+      box-shadow: 0 0 7px rgba(239,128,110,.34);
+    }
+    .last-move-note strong { color: var(--danger); font: 800 .82rem ui-monospace, Consolas, monospace; }
 
     .legal-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 15px; }
     .move-chip {
@@ -314,6 +424,8 @@
       .score { font-size: 1.2rem; }
       .score-disc { width: 20px; }
       .turn-pill { padding: 0 9px; font-size: .7rem; }
+      .view-controls { gap: 5px; }
+      .toggle-button { padding: 0 8px; font-size: .68rem; }
       .ai-panel { grid-template-columns: 1fr; }
       .ai-actions { grid-template-columns: repeat(2, 1fr); }
     }
@@ -328,7 +440,7 @@
     <header>
       <div>
         <p class="eyebrow">Shared board for human + AI</p>
-        <h1>AIとオセロ</h1>
+        <h1>AIとリバーシ</h1>
         <p class="lede">同じ画面を見ながら、一手ずつ。盤面の裏側には、画面を操作できるAIが読み間違えにくい状態データが同期されています。</p>
       </div>
       <div class="header-actions" aria-label="ゲーム操作">
@@ -337,7 +449,7 @@
       </div>
     </header>
 
-    <section class="game-layout" aria-label="オセロ対局">
+    <section class="game-layout" aria-label="リバーシ対局">
       <div class="game-card">
         <div class="scorebar" aria-label="得点と手番">
           <div class="player"><span class="score-disc black" aria-hidden="true"></span><span>黒</span><strong id="black-score" class="score">2</strong></div>
@@ -345,17 +457,25 @@
           <div class="player"><strong id="white-score" class="score">2</strong><span>白</span><span class="score-disc white" aria-hidden="true"></span></div>
         </div>
 
+        <div class="view-controls" aria-label="盤面の表示設定">
+          <span class="view-controls-label">表示</span>
+          <button id="coordinate-toggle" class="toggle-button" type="button" aria-pressed="true">盤面座標 <span class="toggle-state">ON</span></button>
+          <button id="human-legal-toggle" class="toggle-button" type="button" aria-pressed="false">人間の合法手 <span class="toggle-state">OFF</span></button>
+          <button id="ai-legal-toggle" class="toggle-button" type="button" aria-pressed="true">AIの合法手 <span class="toggle-state">ON</span></button>
+        </div>
+
         <div class="board-wrap">
           <div class="column-labels" aria-hidden="true"><span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span></div>
           <div class="row-labels" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span></div>
-          <div id="board" role="grid" aria-label="8かける8のオセロ盤"></div>
+          <div id="board" class="show-coordinates" role="grid" aria-label="8かける8のリバーシ盤"></div>
         </div>
       </div>
 
       <aside class="side-stack">
         <section class="side-card" aria-labelledby="status-heading">
           <h2 id="status-heading">いまの対局</h2>
-          <p id="status-text" class="status-text" aria-live="polite">黒の番です。黄色い点が置ける場所です。</p>
+          <p id="status-text" class="status-text" aria-live="polite">黒の番です。盤面を読んで一手どうぞ。</p>
+          <p id="last-move-note" class="last-move-note" hidden><span class="last-move-icon" aria-hidden="true"></span>ターゲット枠は直前の手：<strong id="last-move-coordinate"></strong></p>
           <div id="legal-list" class="legal-list" aria-label="現在の合法手"></div>
         </section>
 
@@ -381,7 +501,7 @@
 
     <p class="sr-only" id="ai-state-summary" aria-live="polite"></p>
     <script id="ai-state-json" type="application/json">{}</script>
-    <footer>サーバー不要・オフライン動作。盤面の黄色い点をクリックして、黒と白を交互に進めてください。</footer>
+    <footer>サーバー不要・オフライン動作。盤面をクリックして、黒と白を交互に進めてください。</footer>
   </main>
 
   <script>
@@ -416,7 +536,12 @@
         aiStateSummary: document.getElementById("ai-state-summary"),
         copyStateButton: document.getElementById("copy-state-button"),
         copyPromptButton: document.getElementById("copy-prompt-button"),
-        copyStatus: document.getElementById("copy-status")
+        copyStatus: document.getElementById("copy-status"),
+        coordinateToggle: document.getElementById("coordinate-toggle"),
+        humanLegalToggle: document.getElementById("human-legal-toggle"),
+        aiLegalToggle: document.getElementById("ai-legal-toggle"),
+        lastMoveNote: document.getElementById("last-move-note"),
+        lastMoveCoordinate: document.getElementById("last-move-coordinate")
       };
 
       let board = [];
@@ -426,6 +551,11 @@
       let moveHistory = [];
       let undoStack = [];
       let revision = 0;
+      let showCoordinates = true;
+      let showHumanLegalHints = false;
+      let showAILegalHints = true;
+      let boardReady = false;
+      let statusTimer = null;
 
       function index(x, y) { return y * SIZE + x; }
       function inside(x, y) { return x >= 0 && x < SIZE && y >= 0 && y < SIZE; }
@@ -497,6 +627,7 @@
       }
 
       function playMove(value) {
+        window.clearTimeout(statusTimer);
         if (gameStatus !== "playing") return { ok: false, reason: "game-over", state: publicState() };
         const parsed = parseCoord(value);
         if (!parsed) return { ok: false, reason: "invalid-coordinate", state: publicState() };
@@ -579,22 +710,28 @@
         const legalMoves = gameStatus === "playing" ? getLegalMoves(turn) : [];
         const score = counts();
         return {
-          schema: "ai-othello-state/v1",
+          schema: "ai-reversi-state/v2",
           revision,
           gameStatus,
           boardEncoding: "8 strings, top-to-bottom; B=black, W=white, .=empty",
           coordinateSystem: "columns a-h left-to-right; rows 1-8 top-to-bottom",
           board: Array.from({ length: SIZE }, (_, y) => board.slice(y * SIZE, (y + 1) * SIZE).join("")),
           turn: gameStatus === "playing" ? (turn === BLACK ? "black" : "white") : null,
-          legalMoves: legalMoves.map(move => move.coordinate),
-          legalMoveDetails: legalMoves.map(move => ({
+          legalHintsIncluded: showAILegalHints,
+          legalMoves: showAILegalHints ? legalMoves.map(move => move.coordinate) : null,
+          legalMoveDetails: showAILegalHints ? legalMoves.map(move => ({
             coordinate: move.coordinate,
             flips: move.flips.map(point => coord(point.x, point.y))
-          })),
+          })) : null,
           lastMove,
           counts: score,
           winner: winner(),
           moveNumber: moveHistory.filter(move => move.coordinate !== "pass").length,
+          display: {
+            coordinates: showCoordinates,
+            humanLegalHints: showHumanLegalHints,
+            aiLegalHints: showAILegalHints
+          },
           moveHistory: moveHistory.map(move => ({ ...move, flippedCoordinates: [...move.flippedCoordinates] }))
         };
       }
@@ -603,42 +740,102 @@
         const position = coord(x, y);
         if (value === BLACK) return `${position}、黒石${lastMove === position ? "、直前の手" : ""}`;
         if (value === WHITE) return `${position}、白石${lastMove === position ? "、直前の手" : ""}`;
+        if (!showAILegalHints) return `${position}、空き`;
         if (legal) return `${position}、空き、${colorName(turn)}の合法手、${flips.length}個の石を返します`;
         return `${position}、空き、現在は置けません`;
       }
 
-      function renderBoard(legalMoves) {
-        const legalMap = new Map(legalMoves.map(move => [move.coordinate, move]));
+      function buildBoard() {
         const fragment = document.createDocumentFragment();
         for (let y = 0; y < SIZE; y += 1) {
           for (let x = 0; x < SIZE; x += 1) {
             const position = coord(x, y);
-            const value = board[index(x, y)];
-            const legalMove = legalMap.get(position);
             const button = document.createElement("button");
             button.type = "button";
-            button.className = `cell${legalMove ? " legal" : ""}${lastMove === position ? " last" : ""}`;
+            button.className = "cell";
             button.setAttribute("role", "gridcell");
-            button.setAttribute("aria-label", cellLabel(x, y, value, Boolean(legalMove), legalMove?.flips ?? []));
             button.dataset.coordinate = position;
             button.dataset.column = COLUMNS[x];
             button.dataset.row = String(y + 1);
-            button.dataset.state = value === BLACK ? "black" : value === WHITE ? "white" : "empty";
-            button.dataset.legal = String(Boolean(legalMove));
-            button.dataset.flips = legalMove ? legalMove.flips.map(point => coord(point.x, point.y)).join(",") : "";
-            button.disabled = !legalMove || gameStatus !== "playing";
-            if (value !== EMPTY) {
-              const disc = document.createElement("span");
-              disc.className = `disc ${value === BLACK ? "black" : "white"}`;
-              disc.setAttribute("aria-hidden", "true");
-              button.appendChild(disc);
-            }
-            if (legalMove) button.addEventListener("click", () => playMove(position));
+            button.dataset.state = "empty";
+
+            const coordinateLabel = document.createElement("span");
+            coordinateLabel.className = "coordinate-label";
+            coordinateLabel.textContent = position;
+            coordinateLabel.setAttribute("aria-hidden", "true");
+
+            const lastMarker = document.createElement("span");
+            lastMarker.className = "last-marker";
+            lastMarker.setAttribute("aria-hidden", "true");
+
+            button.append(coordinateLabel, lastMarker);
+            button.addEventListener("click", () => {
+              const result = playMove(position);
+              if (!result.ok && result.reason === "illegal-move") announceIllegalMove(position, button);
+            });
             fragment.appendChild(button);
           }
         }
         els.board.replaceChildren(fragment);
-        els.board.setAttribute("aria-label", `オセロ盤、${colorName(turn)}の番、更新番号${revision}`);
+      }
+
+      function announceIllegalMove(position, button) {
+        window.clearTimeout(statusTimer);
+        button.animate(
+          [{ transform: "translateX(0)" }, { transform: "translateX(-4px)" }, { transform: "translateX(4px)" }, { transform: "translateX(0)" }],
+          { duration: 180, easing: "ease-out" }
+        );
+        els.statusText.textContent = `${position} には置けません。別のマスを試してください。`;
+        statusTimer = window.setTimeout(render, 1500);
+      }
+
+      function renderBoard(legalMoves) {
+        if (!els.board.children.length) buildBoard();
+        const legalMap = new Map(legalMoves.map(move => [move.coordinate, move]));
+        const cells = els.board.children;
+
+        for (let y = 0; y < SIZE; y += 1) {
+          for (let x = 0; x < SIZE; x += 1) {
+            const position = coord(x, y);
+            const value = board[index(x, y)];
+            const stateName = value === BLACK ? "black" : value === WHITE ? "white" : "empty";
+            const legalMove = legalMap.get(position);
+            const button = cells[index(x, y)];
+            const previousState = button.dataset.state;
+            let disc = button.querySelector(".disc");
+
+            button.classList.toggle("legal", showHumanLegalHints && Boolean(legalMove));
+            button.classList.toggle("last", lastMove === position);
+            button.setAttribute("aria-label", cellLabel(x, y, value, Boolean(legalMove), legalMove?.flips ?? []));
+            button.dataset.state = stateName;
+            button.disabled = gameStatus !== "playing";
+
+            if (showAILegalHints) {
+              button.dataset.legal = String(Boolean(legalMove));
+              button.dataset.flips = legalMove ? legalMove.flips.map(point => coord(point.x, point.y)).join(",") : "";
+            } else {
+              delete button.dataset.legal;
+              delete button.dataset.flips;
+            }
+
+            if (value === EMPTY) {
+              if (disc) disc.remove();
+            } else if (!disc) {
+              disc = document.createElement("span");
+              disc.setAttribute("aria-hidden", "true");
+              disc.className = `disc ${stateName}${boardReady && lastMove === position ? " is-new" : ""}`;
+              button.prepend(disc);
+            } else if (previousState !== stateName) {
+              disc.className = `disc ${stateName} is-flipped`;
+            } else {
+              disc.className = `disc ${stateName}`;
+            }
+          }
+        }
+
+        els.board.classList.toggle("show-coordinates", showCoordinates);
+        els.board.setAttribute("aria-label", `リバーシ盤、${gameStatus === "playing" ? `${colorName(turn)}の番` : "対局終了"}、更新番号${revision}`);
+        boardReady = true;
       }
 
       function renderHistory() {
@@ -657,6 +854,11 @@
         els.historyList.scrollTop = els.historyList.scrollHeight;
       }
 
+      function updateToggle(button, enabled) {
+        button.setAttribute("aria-pressed", String(enabled));
+        button.querySelector(".toggle-state").textContent = enabled ? "ON" : "OFF";
+      }
+
       function render() {
         const state = publicState();
         const legalMoves = gameStatus === "playing" ? getLegalMoves(turn) : [];
@@ -666,13 +868,20 @@
         els.blackScore.textContent = String(state.counts.black);
         els.whiteScore.textContent = String(state.counts.white);
         els.undoButton.disabled = undoStack.length === 0;
-        els.legalList.replaceChildren(...state.legalMoves.map(move => {
+        els.legalList.hidden = !showHumanLegalHints;
+        els.legalList.replaceChildren(...legalMoves.map(move => {
           const chip = document.createElement("span");
           chip.className = "move-chip";
-          chip.textContent = move;
-          chip.dataset.coordinate = move;
+          chip.textContent = move.coordinate;
+          chip.dataset.coordinate = move.coordinate;
           return chip;
         }));
+
+        updateToggle(els.coordinateToggle, showCoordinates);
+        updateToggle(els.humanLegalToggle, showHumanLegalHints);
+        updateToggle(els.aiLegalToggle, showAILegalHints);
+        els.lastMoveNote.hidden = !lastMove;
+        els.lastMoveCoordinate.textContent = lastMove ?? "";
 
         if (gameStatus === "finished") {
           const result = state.winner === "draw" ? "引き分け" : `${state.winner === "black" ? "黒" : "白"}の勝ち`;
@@ -681,7 +890,9 @@
           els.turnPill.style.color = "var(--danger)";
         } else {
           els.turnLabel.textContent = `${colorName(turn)}の番`;
-          els.statusText.textContent = `${colorName(turn)}の番です。置ける場所は ${state.legalMoves.join("、")} です。`;
+          els.statusText.textContent = showHumanLegalHints
+            ? `${colorName(turn)}の番です。置ける場所は ${legalMoves.map(move => move.coordinate).join("、")} です。`
+            : `${colorName(turn)}の番です。盤面を読んで一手どうぞ。`;
           els.turnPill.style.color = "var(--accent)";
         }
 
@@ -690,13 +901,17 @@
         els.aiStateJson.textContent = json.replace(/<\//g, "<\\/");
         els.aiStateSummary.textContent = gameStatus === "finished"
           ? `更新番号${revision}。対局終了。黒${state.counts.black}、白${state.counts.white}。`
-          : `更新番号${revision}。${colorName(turn)}の番。黒${state.counts.black}、白${state.counts.white}。合法手は${state.legalMoves.join("、")}。`;
+          : showAILegalHints
+            ? `更新番号${revision}。${colorName(turn)}の番。黒${state.counts.black}、白${state.counts.white}。合法手は${state.legalMoves.join("、")}。`
+            : `更新番号${revision}。${colorName(turn)}の番。黒${state.counts.black}、白${state.counts.white}。合法手情報は非表示。`;
 
         document.body.dataset.revision = String(revision);
         document.body.dataset.turn = state.turn ?? "none";
         document.body.dataset.gameStatus = gameStatus;
-        document.title = gameStatus === "playing" ? `AIとオセロ — ${colorName(turn)}の番` : "AIとオセロ — 対局終了";
-        window.dispatchEvent(new CustomEvent("othello-state-changed", { detail: state }));
+        document.body.dataset.humanLegalHints = showHumanLegalHints ? "on" : "off";
+        document.body.dataset.aiLegalHints = showAILegalHints ? "on" : "off";
+        document.title = gameStatus === "playing" ? `AIとリバーシ — ${colorName(turn)}の番` : "AIとリバーシ — 対局終了";
+        window.dispatchEvent(new CustomEvent("reversi-state-changed", { detail: state }));
       }
 
       async function copyText(text, message) {
@@ -725,16 +940,36 @@
       els.copyStateButton.addEventListener("click", () => copyText(JSON.stringify(publicState(), null, 2), "盤面状態をコピーしました"));
       els.copyPromptButton.addEventListener("click", () => {
         const state = JSON.stringify(publicState(), null, 2);
-        const prompt = `私とオセロをしてください。あなたは現在の手番の一手を選び、coordinateだけを明確に答えてください。盤面は上が1行目、左がa列です。\n\n${state}`;
+        const prompt = `私とリバーシをしてください。あなたは現在の手番の一手を選び、coordinateだけを明確に答えてください。盤面は上が1行目、左がa列です。legalMovesがnullの場合は、盤面から合法手を計算してください。\n\n${state}`;
         copyText(prompt, "対局プロンプトをコピーしました");
       });
 
-      window.othelloAI = Object.freeze({
+      els.coordinateToggle.addEventListener("click", () => {
+        showCoordinates = !showCoordinates;
+        render();
+      });
+      els.humanLegalToggle.addEventListener("click", () => {
+        showHumanLegalHints = !showHumanLegalHints;
+        render();
+      });
+      els.aiLegalToggle.addEventListener("click", () => {
+        showAILegalHints = !showAILegalHints;
+        render();
+      });
+
+      window.reversiAI = Object.freeze({
         getState: () => JSON.parse(JSON.stringify(publicState())),
         playMove,
         reset: resetGame,
         undo: undoMove,
-        version: "1.0.0"
+        setDisplay: (options = {}) => {
+          if (typeof options.coordinates === "boolean") showCoordinates = options.coordinates;
+          if (typeof options.humanLegalHints === "boolean") showHumanLegalHints = options.humanLegalHints;
+          if (typeof options.aiLegalHints === "boolean") showAILegalHints = options.aiLegalHints;
+          render();
+          return publicState().display;
+        },
+        version: "2.0.0"
       });
 
       board = newBoard();
